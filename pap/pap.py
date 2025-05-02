@@ -1,19 +1,39 @@
-def can_schedule(tasks, processors, D):
-    max_loads = [speed * D for speed in processors]
+import multiprocessing as mp
+
+
+def is_valid_distribution(start_index, tasks, processors, max_loads):
+    # Попытка распределить задачи, начиная с первого процессора по индексу start_index
+    loads = [0] * len(processors)
+    return backtrack(tasks, max_loads, loads, 0, start_index)
+
+
+def backtrack(tasks, max_loads, loads, i, start_index=0):
+    if i == len(tasks):
+        return True
+    for j in range(start_index, len(loads)):
+        if loads[j] + tasks[i] <= max_loads[j]:
+            loads[j] += tasks[i]
+            if backtrack(tasks, max_loads, loads, i + 1):
+                return True
+            loads[j] -= tasks[i]
+    for j in range(start_index):
+        if loads[j] + tasks[i] <= max_loads[j]:
+            loads[j] += tasks[i]
+            if backtrack(tasks, max_loads, loads, i + 1):
+                return True
+            loads[j] -= tasks[i]
+    return False
+
+
+def can_schedule_parallel(tasks, processors, D):
+    max_loads = [p * D for p in processors]
     tasks.sort(reverse=True)
 
-    def backtrack(i, loads):
-        if i == len(tasks):
-            return True
-        for j in range(len(processors)):
-            if loads[j] + tasks[i] <= max_loads[j]:
-                loads[j] += tasks[i]
-                if backtrack(i + 1, loads):
-                    return True
-                loads[j] -= tasks[i]
-        return False
+    with mp.Pool(processes=len(processors)) as pool:
+        args = [(i, tasks, processors, max_loads) for i in range(len(processors))]
+        results = pool.starmap(is_valid_distribution, args)
 
-    return backtrack(0, [0] * len(processors))
+    return any(results)
 
 
 # --- Ввод данных пользователем ---
@@ -21,13 +41,11 @@ def read_list(prompt):
     return list(map(int, input(prompt).strip().split()))
 
 
-# Ввод
-tasks = read_list("Введите количества инструкций для каждого процесса через пробел: ")
-processors = read_list("Введите скорости процессоров (инструкций/сек) через пробел: ")
-D = int(input("Введите максимальное допустимое время выполнения (в секундах): "))
+if __name__ == "__main__":
+    mp.freeze_support()  # Для Windows
+    tasks = read_list("Введите количества инструкций для каждого процесса через пробел: ")
+    processors = read_list("Введите скорости процессоров (инструкций/сек) через пробел: ")
+    D = int(input("Введите максимальное допустимое время выполнения (в секундах): "))
 
-# Проверка и вывод
-if can_schedule(tasks, processors, D):
-    print("Можно распределить задачи")
-else:
-    print("Невозможно распределить задачи")
+    result = can_schedule_parallel(tasks, processors, D)
+    print("Можно распределить задачи" if result else "Невозможно распределить задачи")
